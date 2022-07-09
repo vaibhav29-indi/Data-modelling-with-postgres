@@ -70,10 +70,11 @@ Execution of the scripts :
 
 References -
 
-Throughout this challenging project the references were made to multiple sources such as - 
-https://stackoverflow.com/questions/41783003/how-do-i-convert-timestamp-to-datetime-date-in-pandas-dataframe
-https://pandas.pydata.org/docs/reference/api/pandas.to_datetime.html
-https://www.geeksforgeeks.org/python-pandas-series-dt-year/
-https://www.geeksforgeeks.org/python-pandas-series-dt-year/
-https://www.geeksforgeeks.org/filter-pandas-dataframe-with-multiple-conditions/
-https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-upsert/
+Throughout this challenging project the references were made to multiple sources such as -
+
+•https://stackoverflow.com/questions/41783003/how-do-i-convert-timestamp-to-datetime-date-in-pandas-dataframe
+•https://pandas.pydata.org/docs/reference/api/pandas.to_datetime.html
+•https://www.geeksforgeeks.org/python-pandas-series-dt-year/
+•https://www.geeksforgeeks.org/python-pandas-series-dt-year/
+•https://www.geeksforgeeks.org/filter-pandas-dataframe-with-multiple-conditions/
+•https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-upsert/
