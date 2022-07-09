@@ -1,0 +1,158 @@
+import os
+import glob
+import psycopg2
+import pandas as pd
+from sql_queries import *
+
+
+def process_song_file(cur, filepath):
+    """
+    
+    Purpose of the function
+    - This function will process the song_files
+    - Each song json file within the /data/song directory is read in as a pandas dataframe
+    - Next the required columns are extracted from the dataframe and values of these columns are converted to list
+    - This list is passed for insertion to the songs dimension table.
+    
+    Similarly the artists dimension table is also populated for the values.
+    
+    Structure of the function
+    For the function, parameters are
+    - cur, this is cursor for accessing the postgres db which is generated in the main function
+    - filepath location of the /data/song directory wherein the json files for songs are stored
+    
+    """
+    # open song file
+    df = pd.read_json(filepath,lines=True)
+    print(df)
+    # insert song record
+    song_data = df[["song_id","title","artist_id","year","duration"]].values[0].tolist()
+    cur.execute(song_table_insert, song_data)
+    
+    # insert artist record
+    artist_data = df[["artist_id","artist_name","artist_location","artist_latitude","artist_longitude"]].values[0].tolist()
+    cur.execute(artist_table_insert, artist_data)
+
+
+def process_log_file(cur, filepath):
+    """
+    
+    Purpose of the function
+    - This function will process the log_files
+    - Each log event json file within the /data/log directory is read in as a pandas dataframe
+    - Each json file, read as dataframe is then filtered for the NextSong action
+    - Value from ts attribute is first converted into datetime format.
+    - Next the series.dt attribute is used for extracting the start_time and other values for hour,day,month, year, etc.
+    - Ultimately these values with respective column names are passed aggregated into dictionary and then converted into dataframe
+    - This dataframe is then used for updating the time dimension table
+    - This is followed by selecting specific columns for populating the users dimension table.
+    - This is followed by populating the songplays fact table.
+    
+    
+    Structure of the function
+    For the function, parameters are
+    - cur, this is cursor for accessing the postgres db which is generated in the main function
+    - filepath location of the /data/log directory wherein the json files for event logs are stored
+    
+    """
+    
+    # open log file
+    df = pd.read_json(filepath,lines=True)
+
+    # filter by NextSong action
+    df = df[df['page'] == 'NextSong']
+
+    # convert timestamp column to datetime
+    t = pd.to_datetime(df['ts'], unit='ms')
+    # Added the below piece of code based on feedback to handle start_time datatype in the songplays fact table
+    df['ts'] = t
+    
+    # insert time data records
+    time_data = [t,t.dt.hour,t.dt.day,t.dt.week,t.dt.month,t.dt.year,t.dt.weekday]
+    column_labels = ('start_time', 'hour', 'day', 'week', 'month', 'year', 'weekday')
+    zipped_file = zip(column_labels, time_data)
+    time_df = pd.DataFrame.from_dict(dict(zipped_file))
+
+    for i, row in time_df.iterrows():
+        cur.execute(time_table_insert, list(row))
+
+    # load user table
+    user_df = df[['userId', 'firstName', 'lastName', 'gender', 'level']]
+
+    # insert user records
+    for i, row in user_df.iterrows():
+        cur.execute(user_table_insert, row)
+
+    # insert songplay records
+    for index, row in df.iterrows():
+        
+        # get songid and artistid from song and artist tables
+        cur.execute(song_select, (row.song, row.artist, row.length))
+        results = cur.fetchone()
+        
+        if results:
+            songid, artistid = results
+        else:
+            songid, artistid = None, None
+
+        # insert songplay record
+        songplay_data = (row.ts, row.userId, row.level, songid, artistid, row.sessionId, row.location, row.userAgent)
+        cur.execute(songplay_table_insert, songplay_data)
+
+
+def process_data(cur, conn, filepath, func):
+    """
+    Purpose of the function
+    - This function will process is used for accessing all the files within the data directories.
+    - Further the specific process function are then called with the files as inputs for further processing.
+    
+    
+    Structure of the function
+    For the function, parameters are
+    - cur, this is cursor for accessing the postgres db which is generated in the main function
+    - conn, this is connection established to the postgres db.
+    - filepath location of the /data/log directory wherein the json files for event logs are stored
+    - process func to be triggered/called, say for insert in the dimension tables or fact tables 
+    
+    """
+    
+    # get all files matching extension from directory
+    all_files = []
+    for root, dirs, files in os.walk(filepath):
+        files = glob.glob(os.path.join(root,'*.json'))
+        for f in files :
+            all_files.append(os.path.abspath(f))
+
+    # get total number of files found
+    num_files = len(all_files)
+    print('{} files found in {}'.format(num_files, filepath))
+
+    # iterate over files and process
+    for i, datafile in enumerate(all_files, 1):
+        func(cur, datafile)
+        conn.commit()
+        print('{}/{} files processed.'.format(i, num_files))
+
+
+def main():
+    """
+    This is the main function in the etl.py file
+    It is responsible for handling all the tasks like connection to the database
+    Creation of the cursor object for CRUD tasks in the database being accessed
+    Calls to the process function
+    
+    The main objective of the function is to establish an ETL pipeline so that 
+    sparkifydb can be updated with data, from data stored in the data/song and data/log folder.
+    """
+    
+    conn = psycopg2.connect("host=127.0.0.1 dbname=sparkifydb user=student password=student")
+    cur = conn.cursor()
+
+    process_data(cur, conn, filepath='data/song_data', func=process_song_file)
+    process_data(cur, conn, filepath='data/log_data', func=process_log_file)
+
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()
